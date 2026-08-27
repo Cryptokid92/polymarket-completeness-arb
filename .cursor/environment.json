@@ -1,0 +1,11 @@
+{
+  "name": "polymarket-completeness-arb",
+  "install": "curl -LsSf https://astral.sh/uv/install.sh | sh && \"$HOME/.local/bin/uv\" sync --frozen",
+  "terminals": [
+    {
+      "name": "paper-ui",
+      "command": "\"$HOME/.local/bin/uv\" run python scripts/paper_ui.py --data-dir data/paper --port 8765"
+    }
+  ],
+  "ports": [8765]
+}
