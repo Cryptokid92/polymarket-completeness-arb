@@ -1,0 +1,1 @@
+{"event_type":"book","ts_ms":7200000,"timestamp":"7200000","condition_id":"c3","token_id":"yes-c3","asset_id":"yes-c3","market_side":"YES","tick_size":"0.01","min_order_size":"5","bids":[{"price":"0.52","size":"80"}],"asks":[{"price":"0.53","size":"80"}],"meta":{"category":"Politics","tags":["senate"],"slug":"c3-slug","end_date":null}}

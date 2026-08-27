@@ -1,0 +1,1 @@
+{"markets_listed":200,"universe":20,"gaps":0,"intents":0,"rejects":185,"reject_reasons":{"neg_risk":180,"seconds_delay":5},"watching":20,"bankroll":"500","daily_pnl":"0","fills":0,"completed_pairs":0,"naked_incidents":0,"alerts":0,"best_edge":"-0.02","nearmiss_considers":4,"edge_histogram":{"lt_-0.05":3,"-0.01_0":1},"heartbeat_ms":1787000100000}

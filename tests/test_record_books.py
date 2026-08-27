@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from arb.app import PublicApiError
+from arb.app import PublicApiError, market_meta, universe_pair
 from arb.money import d
 from arb.recorder import book_to_event, frames_from_events, load_jsonl
 from arb.books import Book, Level
@@ -137,6 +137,106 @@ def test_book_to_event_round_trips_frames() -> None:
     assert frames[0].no.asks[0].price == d("0.42")
 
 
+def test_market_meta_extracts_category_tags_and_close() -> None:
+    market = SimpleNamespace(
+        condition_id="0xcond",
+        slug="will-x-happen",
+        question="Will X happen?",
+        category="Politics",
+        tags=(
+            SimpleNamespace(slug="elections", label="Elections"),
+            SimpleNamespace(slug=None, label="US"),
+        ),
+        end_date_iso="2026-11-03T00:00:00Z",
+    )
+    meta = market_meta(market)
+    assert meta["category"] == "Politics"
+    assert meta["tags"] == ["elections", "US"]
+    assert meta["slug"] == "will-x-happen"
+    assert meta["end_date"] == "2026-11-03T00:00:00Z"
+
+
+def test_market_meta_captures_event_grouping() -> None:
+    market = SimpleNamespace(
+        slug="xi-out",
+        category=None,
+        tags=(),
+        events=(SimpleNamespace(slug="xi-event", title="Xi Jinping out?"),),
+    )
+    meta = market_meta(market)
+    assert meta["event_slug"] == "xi-event"
+    assert meta["event_title"] == "Xi Jinping out?"
+
+
+def test_market_meta_degrades_when_fields_missing() -> None:
+    meta = market_meta(SimpleNamespace())
+    assert meta == {
+        "category": None,
+        "tags": [],
+        "slug": None,
+        "end_date": None,
+        "event_slug": None,
+        "event_title": None,
+    }
+
+
+def test_universe_pair_carries_meta() -> None:
+    pair = universe_pair(_market())
+    assert pair.meta["category"] == "Politics"
+    assert pair.meta["slug"] == "will-x-happen"
+
+
+def test_book_to_event_nests_meta_and_still_replays() -> None:
+    yes = Book(
+        token_id="yes-1",
+        bids=[Level(price=d("0.54"), size=d("10"))],
+        asks=[Level(price=d("0.55"), size=d("80"))],
+        tick=d("0.01"),
+        min_order_size=d("5"),
+        ts_ms=1000,
+    )
+    no = Book(
+        token_id="no-1",
+        bids=[Level(price=d("0.41"), size=d("10"))],
+        asks=[Level(price=d("0.42"), size=d("80"))],
+        tick=d("0.01"),
+        min_order_size=d("5"),
+        ts_ms=1000,
+    )
+    meta = {"category": "Sports", "tags": ["nba"], "slug": "s", "end_date": None}
+    events = [
+        book_to_event(yes, "YES", "c1", meta),
+        book_to_event(no, "NO", "c1", meta),
+    ]
+    assert events[0]["meta"]["category"] == "Sports"
+    # Metadata is diagnostic only; frames still pair YES/NO for the market.
+    frames = frames_from_events(events)
+    assert len(frames) == 1
+    assert frames[0].yes.token_id == "yes-1"
+
+
+def test_metadata_less_tape_still_replays() -> None:
+    yes = Book(
+        token_id="yes-1",
+        bids=[Level(price=d("0.54"), size=d("10"))],
+        asks=[Level(price=d("0.55"), size=d("80"))],
+        tick=d("0.01"),
+        min_order_size=d("5"),
+        ts_ms=1000,
+    )
+    no = Book(
+        token_id="no-1",
+        bids=[Level(price=d("0.41"), size=d("10"))],
+        asks=[Level(price=d("0.42"), size=d("80"))],
+        tick=d("0.01"),
+        min_order_size=d("5"),
+        ts_ms=1000,
+    )
+    events = [book_to_event(yes, "YES", "c1"), book_to_event(no, "NO", "c1")]
+    assert "meta" not in events[0]
+    assert len(frames_from_events(events)) == 1
+
+
 @pytest.mark.asyncio
 async def test_record_public_books_writes_watch_slice(tmp_path: Path) -> None:
     module = _load_script()
@@ -160,6 +260,7 @@ async def test_record_public_books_writes_watch_slice(tmp_path: Path) -> None:
     assert written >= 2
     events = load_jsonl(out)
     assert events[0]["market_side"] in {"YES", "NO"}
+    assert events[0]["meta"]["category"] == "Politics"
     assert frames_from_events(events)
 
 

@@ -82,6 +82,7 @@ class UniversePair:
     no_token_id: str
     flags: MarketFlags
     fees: MarketFees
+    meta: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -282,6 +283,45 @@ def _is_short_crypto_window(market: Any) -> bool:
     return any(hint in lowered for hint in crypto_hints)
 
 
+def market_meta(market: Any) -> dict[str, Any]:
+    """Diagnostic classification for a market. Never used for money or sizing.
+
+    Fed only into the recorded tape so offline analysis can bucket near-miss
+    edge by category / tags / close time. Missing fields degrade to None/[].
+    """
+    tags: list[str] = []
+    for tag in getattr(market, "tags", ()) or ():
+        slug = getattr(tag, "slug", None) or getattr(tag, "label", None)
+        if slug:
+            tags.append(str(slug))
+    end: str | None = None
+    for attr in ("end_date_iso", "end_date", "close_time", "game_start_time"):
+        value = getattr(market, attr, None)
+        if value:
+            end = str(value)
+            break
+    category = str(getattr(market, "category", "") or "") or None
+    slug = str(getattr(market, "slug", "") or "") or None
+    # The installed polymarket-client listing does not populate category/tags,
+    # but it does expose the event grouping. Capture it so offline analysis has
+    # a real classification dimension to bucket by.
+    event_slug: str | None = None
+    event_title: str | None = None
+    events = getattr(market, "events", ()) or ()
+    if events:
+        first = events[0]
+        event_slug = str(getattr(first, "slug", "") or "") or None
+        event_title = str(getattr(first, "title", "") or "") or None
+    return {
+        "category": category,
+        "tags": tags,
+        "slug": slug,
+        "end_date": end,
+        "event_slug": event_slug,
+        "event_title": event_title,
+    }
+
+
 def universe_pair(market: Any) -> UniversePair:
     yes_id = str(market.outcomes.yes.token_id)
     no_id = str(market.outcomes.no.token_id)
@@ -300,6 +340,7 @@ def universe_pair(market: Any) -> UniversePair:
             binary=True,
         ),
         fees=MarketFees(yes_rate=fee_rate, no_rate=fee_rate),
+        meta=market_meta(market),
     )
 
 
@@ -778,9 +819,9 @@ async def run_paper(
         yes_book = store.get(pair.yes_token_id)
         no_book = store.get(pair.no_token_id)
         if yes_book is not None:
-            recorder.write(book_to_event(yes_book, "YES", pair.condition_id))
+            recorder.write(book_to_event(yes_book, "YES", pair.condition_id, pair.meta))
         if no_book is not None:
-            recorder.write(book_to_event(no_book, "NO", pair.condition_id))
+            recorder.write(book_to_event(no_book, "NO", pair.condition_id, pair.meta))
 
     def note_score(miss: NearMiss) -> None:
         if miss.raw_edge is None:

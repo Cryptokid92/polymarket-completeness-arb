@@ -402,3 +402,125 @@ def summarize_tape(
         "capital_turns": str(result.capital_turns),
         "verdict": verdict,
     }
+
+
+def _passive_buy_filled(book: Book, limit: Decimal) -> bool:
+    """A resting buy at ``limit`` fills when a seller crosses down to it.
+
+    Optimistic upper bound: it ignores queue position and partial fills, so a
+    true maker-fill rate is no higher than this. Uses only the observed book.
+    """
+    return bool(book.asks) and book.asks[0].price <= limit
+
+
+def estimate_maker_fill(
+    events: Sequence[dict],
+    config: BacktestConfig | None = None,
+) -> dict[str, object]:
+    """Empirical maker-rest fill study over a recorded tape. Never trades.
+
+    For each frame it posts a passive completeness bid on each leg at that
+    frame's best bid (limit derived only from the deciding frame, so there is
+    no lookahead), then checks whether a later frame within ``maker_rest_ms``
+    has an ask crossing down to that limit. It reports per-leg and joint fill
+    rates plus the gross completeness edge captured when both legs fill, minus
+    an approximate hedge cost for one-legged (naked) fills.
+
+    This is diagnostic only. It does not change hunt/risk caps and does not
+    imply a live path.
+    """
+    cfg = config or BacktestConfig(path="maker_gtc")
+    frames = frames_from_events(events)
+    size = cfg.min_size
+    probes = 0
+    yes_fills = 0
+    no_fills = 0
+    both_fills = 0
+    one_leg_fills = 0
+    gross_edge_sum = _ZERO
+    best_edge: Decimal | None = None
+    positive_edge_pairs = 0
+
+    for i, frame in enumerate(frames):
+        if not frame.yes.bids or not frame.no.bids:
+            continue
+        yes_limit = frame.yes.bids[0].price
+        no_limit = frame.no.bids[0].price
+        probes += 1
+        yes_ok = False
+        no_ok = False
+        for j in range(i + 1, len(frames)):
+            later = frames[j]
+            if later.ts_ms - frame.ts_ms > cfg.maker_rest_ms:
+                break
+            if not yes_ok and _passive_buy_filled(later.yes, yes_limit):
+                yes_ok = True
+            if not no_ok and _passive_buy_filled(later.no, no_limit):
+                no_ok = True
+            if yes_ok and no_ok:
+                break
+        if yes_ok:
+            yes_fills += 1
+        if no_ok:
+            no_fills += 1
+        if yes_ok and no_ok:
+            both_fills += 1
+            edge = _ONE - yes_limit - no_limit
+            gross_edge_sum += edge * size
+            if best_edge is None or edge > best_edge:
+                best_edge = edge
+            if edge > _ZERO:
+                positive_edge_pairs += 1
+        elif yes_ok or no_ok:
+            one_leg_fills += 1
+
+    naked_hedge_cost = cfg.hedge_slippage * size * Decimal(one_leg_fills)
+    net_ev = gross_edge_sum - naked_hedge_cost
+
+    def _rate(count: int) -> str:
+        if probes == 0:
+            return "0"
+        return str(Decimal(count) / Decimal(probes))
+
+    if probes == 0:
+        verdict = "no_probes"
+    elif net_ev > _ZERO:
+        verdict = "positive"
+    else:
+        verdict = "non_positive"
+
+    return {
+        "probes": probes,
+        "maker_rest_ms": cfg.maker_rest_ms,
+        "size": str(size),
+        "yes_fill_rate": _rate(yes_fills),
+        "no_fill_rate": _rate(no_fills),
+        "both_fill_rate": _rate(both_fills),
+        "both_fills": both_fills,
+        "one_leg_fills": one_leg_fills,
+        "gross_edge_sum": str(gross_edge_sum),
+        "best_edge": str(best_edge) if best_edge is not None else None,
+        "positive_edge_pairs": positive_edge_pairs,
+        "naked_hedge_cost": str(naked_hedge_cost),
+        "net_ev": str(net_ev),
+        "verdict": verdict,
+    }
+
+
+def summarize_tape_paths(
+    events: Sequence[dict],
+    *,
+    taker_config: BacktestConfig | None = None,
+    maker_config: BacktestConfig | None = None,
+) -> dict[str, object]:
+    """Run taker and maker replays side by side plus the maker-fill study.
+
+    Returns one dict with ``taker`` (default taker replay), ``maker`` (the
+    ``maker_gtc`` replay), and ``maker_fill`` (empirical rest-fill study).
+    """
+    maker_cfg = maker_config or BacktestConfig(path="maker_gtc")
+    return {
+        "taker": summarize_tape(events, taker_config),
+        "maker": summarize_tape(events, maker_cfg),
+        "maker_fill": estimate_maker_fill(events, maker_cfg),
+    }
