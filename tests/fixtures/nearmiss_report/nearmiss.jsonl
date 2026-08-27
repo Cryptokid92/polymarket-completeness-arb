@@ -1,0 +1,4 @@
+{"ts_ms":0,"condition_id":"c1","raw_edge":"-0.001","yes_vwap":"0.55","no_vwap":"0.451","fillable_shares":"5","book_age_ms":120,"in_watch":true,"thin":false}
+{"ts_ms":3600000,"condition_id":"c2","raw_edge":"-0.02","yes_vwap":"0.52","no_vwap":"0.50","fillable_shares":"10","book_age_ms":200,"in_watch":false,"thin":false}
+{"ts_ms":3600000,"condition_id":"c3","raw_edge":"-0.05","yes_vwap":"0.53","no_vwap":"0.52","fillable_shares":"8","book_age_ms":150,"in_watch":false,"thin":false}
+{"ts_ms":7200000,"condition_id":"c4","raw_edge":null,"yes_vwap":null,"no_vwap":null,"fillable_shares":"0","book_age_ms":300,"in_watch":false,"thin":true}
