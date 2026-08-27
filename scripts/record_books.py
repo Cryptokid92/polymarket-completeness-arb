@@ -128,11 +128,12 @@ async def record_public_books(
         nonlocal written
         yes = store.get(pair.yes_token_id)
         no = store.get(pair.no_token_id)
+        meta = getattr(pair, "meta", None)
         if yes is not None:
-            recorder.write(book_to_event(yes, "YES", pair.condition_id))
+            recorder.write(book_to_event(yes, "YES", pair.condition_id, meta))
             written += 1
         if no is not None:
-            recorder.write(book_to_event(no, "NO", pair.condition_id))
+            recorder.write(book_to_event(no, "NO", pair.condition_id, meta))
             written += 1
 
     async def on_ok(books: object, _batch: list[str]) -> None:

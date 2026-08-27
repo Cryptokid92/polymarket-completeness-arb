@@ -113,9 +113,19 @@ def _levels_to_rows(levels: list[Level]) -> list[dict[str, str]]:
     return [{"price": str(level.price), "size": str(level.size)} for level in levels]
 
 
-def book_to_event(book: Book, market_side: str, condition_id: str) -> dict[str, Any]:
-    """Public-book JSONL row compatible with frames_from_events. No orders."""
-    return {
+def book_to_event(
+    book: Book,
+    market_side: str,
+    condition_id: str,
+    meta: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Public-book JSONL row compatible with frames_from_events. No orders.
+
+    Optional `meta` (market category/tags/slug/close time) is nested under a
+    "meta" key. It is diagnostic classification only; `frames_from_events`
+    ignores it and money never comes from it.
+    """
+    event: dict[str, Any] = {
         "event_type": "book",
         "ts_ms": book.ts_ms,
         "timestamp": str(book.ts_ms),
@@ -128,6 +138,9 @@ def book_to_event(book: Book, market_side: str, condition_id: str) -> dict[str, 
         "bids": _levels_to_rows(book.bids),
         "asks": _levels_to_rows(book.asks),
     }
+    if meta:
+        event["meta"] = dict(meta)
+    return event
 
 
 class BookRecorder:
