@@ -52,6 +52,19 @@ def test_condition_categories_from_tape_meta() -> None:
     assert cats == {"c1": "Politics", "c2": "Sports", "c3": "Politics"}
 
 
+def test_condition_categories_falls_back_to_event_grouping() -> None:
+    events = [
+        {
+            "condition_id": "e1",
+            "meta": {"category": None, "event_title": "World Cup Final"},
+        },
+        {"condition_id": "e2", "meta": {"category": None, "event_slug": "us-cpi"}},
+        {"condition_id": "e3", "meta": {"category": None}},
+    ]
+    cats = condition_categories(events)
+    assert cats == {"e1": "World Cup Final", "e2": "us-cpi"}
+
+
 def test_analyze_overall_best_and_would_not_fire() -> None:
     summary = analyze_nearmiss(_rows(), categories=_categories(), min_edge=d("0.01"))
     assert summary["considers"] == 4

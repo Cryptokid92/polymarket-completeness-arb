@@ -302,7 +302,24 @@ def market_meta(market: Any) -> dict[str, Any]:
             break
     category = str(getattr(market, "category", "") or "") or None
     slug = str(getattr(market, "slug", "") or "") or None
-    return {"category": category, "tags": tags, "slug": slug, "end_date": end}
+    # The installed polymarket-client listing does not populate category/tags,
+    # but it does expose the event grouping. Capture it so offline analysis has
+    # a real classification dimension to bucket by.
+    event_slug: str | None = None
+    event_title: str | None = None
+    events = getattr(market, "events", ()) or ()
+    if events:
+        first = events[0]
+        event_slug = str(getattr(first, "slug", "") or "") or None
+        event_title = str(getattr(first, "title", "") or "") or None
+    return {
+        "category": category,
+        "tags": tags,
+        "slug": slug,
+        "end_date": end,
+        "event_slug": event_slug,
+        "event_title": event_title,
+    }
 
 
 def universe_pair(market: Any) -> UniversePair:

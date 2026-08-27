@@ -73,3 +73,10 @@ Paper trading helper (not Task 12): closest-book / near-miss JSONL + stats, `rec
 - Plan: `docs/plans/cursor-paper-trading-helper.md`
 - Evidence: `docs/debug-reports/2026-08-27-paper-evidence.md` — 1-hour `--all-markets` finished (`listed=5000` / `universe=1546` / `gaps=0` / best walked edge `-0.001`). Same-market tape: 0 trades, verdict `non_positive`. Stop. Do not loosen `min_edge`. Task 12 stays dark.
 - `ALLOW_LIVE` was not created. Live trading is not enabled. No secrets committed.
+
+Edge-discovery research (not Task 12): Track A tooling to test whether any realizable completeness edge exists. Metadata capture on the recorded tape (`market_meta`, event grouping since the SDK listing omits category/tags), offline near-miss analyzer bucketed by classification and UTC hour (`scripts/analyze_nearmiss.py`), empirical maker-rest fill study + taker/maker side-by-side replay (`estimate_maker_fill`, `summarize_tape_paths`, `scripts/backtest_tape.py`), and a multi-session aggregator (`scripts/aggregate_evidence.py`). Caps unchanged. Task 12 stays dark.
+
+- `uv run pytest -q` — 241 passed
+- Plan: `docs/plans/` (Track A — edge discovery)
+- Evidence: `docs/debug-reports/2026-08-27-edge-discovery-research.md` — full-universe cycle (`listed=5000` / `universe=1546` / `gaps=0` / 48,821 walked considers / 0 positive-edge buckets / best `-0.001`); maker-rest study joint-fill rate 0 with only naked one-leg fills; taker + maker both `non_positive`. Stop. Do not loosen risk. Do not go live.
+- `ALLOW_LIVE` was not created. Live trading is not enabled. No secrets committed.

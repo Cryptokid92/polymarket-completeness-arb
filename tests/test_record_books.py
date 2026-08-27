@@ -156,9 +156,28 @@ def test_market_meta_extracts_category_tags_and_close() -> None:
     assert meta["end_date"] == "2026-11-03T00:00:00Z"
 
 
+def test_market_meta_captures_event_grouping() -> None:
+    market = SimpleNamespace(
+        slug="xi-out",
+        category=None,
+        tags=(),
+        events=(SimpleNamespace(slug="xi-event", title="Xi Jinping out?"),),
+    )
+    meta = market_meta(market)
+    assert meta["event_slug"] == "xi-event"
+    assert meta["event_title"] == "Xi Jinping out?"
+
+
 def test_market_meta_degrades_when_fields_missing() -> None:
     meta = market_meta(SimpleNamespace())
-    assert meta == {"category": None, "tags": [], "slug": None, "end_date": None}
+    assert meta == {
+        "category": None,
+        "tags": [],
+        "slug": None,
+        "end_date": None,
+        "event_slug": None,
+        "event_title": None,
+    }
 
 
 def test_universe_pair_carries_meta() -> None:

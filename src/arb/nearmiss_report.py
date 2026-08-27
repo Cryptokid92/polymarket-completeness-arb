@@ -73,11 +73,25 @@ def parse_nearmiss_rows(rows: Iterable[dict[str, Any]]) -> list[NearMissRow]:
     return parsed
 
 
-def condition_categories(tape_events: Iterable[dict[str, Any]]) -> dict[str, str]:
-    """Map condition_id -> category from recorded tape ``meta``.
+def _meta_label(meta: dict[str, Any]) -> str | None:
+    """Best available classification label from a tape ``meta`` block.
 
-    Later rows win, so a market keeps whatever category the tape last carried.
-    Rows without ``meta.category`` are skipped (they stay ``unknown``).
+    Prefers an explicit ``category`` and falls back to the event grouping
+    (``event_title`` then ``event_slug``), since the installed SDK listing
+    does not populate category/tags. Returns None when nothing is available.
+    """
+    for key in ("category", "event_title", "event_slug"):
+        value = meta.get(key)
+        if value:
+            return str(value)
+    return None
+
+
+def condition_categories(tape_events: Iterable[dict[str, Any]]) -> dict[str, str]:
+    """Map condition_id -> classification label from recorded tape ``meta``.
+
+    Later rows win, so a market keeps whatever label the tape last carried.
+    Rows without any usable ``meta`` label are skipped (they stay ``unknown``).
     """
     mapping: dict[str, str] = {}
     for event in tape_events:
@@ -87,9 +101,9 @@ def condition_categories(tape_events: Iterable[dict[str, Any]]) -> dict[str, str
         meta = event.get("meta")
         if not isinstance(meta, dict):
             continue
-        category = meta.get("category")
-        if category:
-            mapping[cid] = str(category)
+        label = _meta_label(meta)
+        if label:
+            mapping[cid] = label
     return mapping
 
 
