@@ -6,13 +6,21 @@ from decimal import Decimal
 from pathlib import Path
 
 from arb.adversary import detect_lookahead, detect_mid_fill
-from arb.backtest import BacktestConfig, run_backtest, summarize_tape, walk_bids
+from arb.backtest import (
+    BacktestConfig,
+    estimate_maker_fill,
+    run_backtest,
+    summarize_tape,
+    summarize_tape_paths,
+    walk_bids,
+)
 from arb.books import Level
 from arb.fees import pair_taker_fees
 from arb.money import d
 from arb.recorder import load_jsonl
 
 RECORDED = Path(__file__).parent / "fixtures" / "recorded" / "gap_persist.jsonl"
+MAKER_FILL = Path(__file__).parent / "fixtures" / "recorded" / "maker_fill.jsonl"
 
 
 def _honest_cfg(**overrides: object) -> BacktestConfig:
@@ -151,3 +159,49 @@ def test_maker_independent_rest_fills_when_touch_holds() -> None:
     for fill in result.fills:
         if fill.kind == "maker_gtc":
             assert fill.fill_source == "ask"
+
+
+def test_estimate_maker_fill_counts_joint_and_naked_fills() -> None:
+    study = estimate_maker_fill(load_jsonl(MAKER_FILL))
+    assert study["probes"] == 6
+    assert study["both_fills"] == 1
+    assert study["one_leg_fills"] == 2
+    assert study["best_edge"] == "0.05"
+    assert study["gross_edge_sum"] == "0.25"
+    assert study["naked_hedge_cost"] == "0.10"
+    assert study["net_ev"] == "0.15"
+    assert study["verdict"] == "positive"
+
+
+def test_estimate_maker_fill_zero_window_never_fills() -> None:
+    study = estimate_maker_fill(
+        load_jsonl(MAKER_FILL),
+        BacktestConfig(path="maker_gtc", maker_rest_ms=0),
+    )
+    assert study["probes"] == 6
+    assert study["both_fills"] == 0
+    assert study["one_leg_fills"] == 0
+    assert Decimal(str(study["net_ev"])) == Decimal("0")
+    assert study["verdict"] == "non_positive"
+
+
+def test_estimate_maker_fill_empty_tape_has_no_probes() -> None:
+    study = estimate_maker_fill([])
+    assert study["probes"] == 0
+    assert study["verdict"] == "no_probes"
+
+
+def test_summarize_tape_paths_reports_both_sides() -> None:
+    paths = summarize_tape_paths(load_jsonl(RECORDED))
+    assert set(paths) == {"taker", "maker", "maker_fill"}
+    assert paths["taker"]["verdict"] == "positive"
+    assert "verdict" in paths["maker"]
+    assert "both_fill_rate" in paths["maker_fill"]
+
+
+def test_maker_fill_limits_use_only_deciding_frame() -> None:
+    # Posting at the deciding frame's best bid must never fill from that same
+    # frame (ask is above bid), so joint fills require a genuine later cross.
+    study = estimate_maker_fill(load_jsonl(MAKER_FILL))
+    assert study["both_fills"] <= study["probes"]
+    assert study["both_fills"] >= 1

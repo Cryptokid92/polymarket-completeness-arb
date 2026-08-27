@@ -13,7 +13,7 @@ import json
 import sys
 from pathlib import Path
 
-from arb.backtest import summarize_tape
+from arb.backtest import summarize_tape_paths
 from arb.recorder import load_jsonl
 
 
@@ -35,6 +35,34 @@ def format_tape_report(summary: dict) -> str:
     return "\n".join(lines)
 
 
+def format_maker_fill(study: dict) -> str:
+    lines = [
+        "maker-rest fill study (passive completeness bids, upper bound)",
+        f"  probes: {study['probes']}  window_ms: {study['maker_rest_ms']}  size: {study['size']}",
+        f"  fill rate yes: {study['yes_fill_rate']}  no: {study['no_fill_rate']}  both: {study['both_fill_rate']}",
+        f"  both fills: {study['both_fills']}  one-leg (naked): {study['one_leg_fills']}",
+        f"  gross edge sum: {study['gross_edge_sum']}  best edge: {study['best_edge']}",
+        f"  positive-edge pairs: {study['positive_edge_pairs']}",
+        f"  naked hedge cost: {study['naked_hedge_cost']}  net ev: {study['net_ev']}",
+        f"  verdict: {study['verdict']}",
+    ]
+    if study["verdict"] == "non_positive":
+        lines.append("  stop: maker net EV is not positive. Do not loosen risk. Do not go live.")
+    return "\n".join(lines)
+
+
+def format_paths_report(paths: dict) -> str:
+    blocks = [
+        "== taker path ==",
+        format_tape_report(dict(paths["taker"])),
+        "== maker path ==",
+        format_tape_report(dict(paths["maker"])),
+        "== maker-fill study ==",
+        format_maker_fill(paths["maker_fill"]),
+    ]
+    return "\n".join(blocks)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Backtest a recorded paper tape. Never places orders."
@@ -51,13 +79,13 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     path = Path(args.tape)
     if not path.is_file():
-        summary = summarize_tape([])
-        print(format_tape_report(summary))
+        paths = summarize_tape_paths([])
+        print(format_paths_report(paths))
         return 0
     events = load_jsonl(path)
-    summary = summarize_tape(events)
-    print(format_tape_report(summary))
-    print(json.dumps(summary, separators=(",", ":")))
+    paths = summarize_tape_paths(events)
+    print(format_paths_report(paths))
+    print(json.dumps(paths, separators=(",", ":")))
     return 0
 
 
